@@ -1,9 +1,9 @@
-# Branch Decision Agent · 可审计的网点关停决策 Agent
+# VeriBranch · 可审计的网点关停决策 Agent
 
 把一个真实的空间决策分析链路（152,538 个美国银行网点、1994–2025）包成
 **会说人话、但每个数字都能追到源文件**的 Agent。
 
-> 定位：不是「让大模型分析数据」，而是「让大模型只负责听懂问题，
+> 名字取自 verify + branch：能答的每个数字都要能验。\n>\n> 定位：不是「让大模型分析数据」，而是「让大模型只负责听懂问题，
 > 算术、口径、适用域一律交给确定性工具，再由策略层决定该不该答」。
 
 ---
@@ -111,6 +111,14 @@ python main.py "网点越密集越容易关停吗" --llm
 
 ---
 
+## 界面
+
+![正常调用：CERT 8 画像 → 风险打分](demos/shot_ok.png)
+
+![越域拦截：问杭州的网点](demos/shot_block.png)
+
+启动：`python web/app.py` → http://127.0.0.1:7860
+
 ## 演示（真实输出）
 
 完整输出见 `demos/demo_output.md`，每次运行的完整报告在 `runs/<run_id>/report.md`。
@@ -185,6 +193,7 @@ python -m pytest tests -q
 ```text
 branch-decision-agent/
 ├── main.py                 # CLI：单问 / --demo / --selftest / --verify-trace
+├── web/                    # 本地网页 demo（Flask，无 CDN）
 ├── agent/
 │   ├── planner.py          # 规则规划器 + 可选 LLM 规划器
 │   ├── executor.py         # 规划 → 校验 → 执行 → 存证

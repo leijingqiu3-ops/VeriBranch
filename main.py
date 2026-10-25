@@ -1,4 +1,4 @@
-"""branch-decision-agent — 把上游空间决策台包成「可审计的 Agent」。
+"""VeriBranch — 把上游空间决策台包成「可审计的 Agent」。
 
 用法:
     python main.py "2010 到 2015 年储蓄银行的关停率是多少"
@@ -75,7 +75,7 @@ def main() -> int:
 
     if args.demo:
         print("=" * 72)
-        print("AgentAttest 落地案例 · 网点关停决策 Agent · 演示")
+        print("VeriBranch · 可审计的网点关停决策 Agent · 演示")
         print("=" * 72)
         for i, (title, q) in enumerate(DEMO, 1):
             print(f"\n{'─' * 72}\n[{i}/{len(DEMO)}] {title}\n问题：{q}\n{'-' * 72}")
