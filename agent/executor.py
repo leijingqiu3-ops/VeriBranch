@@ -49,12 +49,13 @@ def _resolve(step: dict, results: list[dict]) -> dict:
     return args
 
 
-def run(question: str, use_llm: bool = False, run: bool = True) -> dict:
+def run(question: str, use_llm: bool = False, run: bool = True,
+        disabled_rules: set[str] | None = None) -> dict:
     tr = trace.Tracer()
     t0 = time.time()
 
     tr.log("input", {"question": question, "llm": use_llm})
-    pre = attest.scan_input(question)
+    pre = attest.scan_input(question, disabled_rules)
     tr.log("attest.pre", attest.summarize(pre))
 
     if any(f.severity == attest.BLOCK for f in pre):
@@ -93,7 +94,7 @@ def run(question: str, use_llm: bool = False, run: bool = True) -> dict:
 
         res = DISPATCH[name](args)
         res.setdefault("ok", False)
-        fs = attest.check_result(name, res)
+        fs = attest.check_result(name, res, disabled=disabled_rules)
         findings.extend(fs)
         tr.log("tool_call", {"tool": name, "args": args,
                              "ok": bool(res.get("ok")),

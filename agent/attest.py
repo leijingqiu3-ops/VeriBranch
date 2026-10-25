@@ -30,18 +30,46 @@ INJECTION_PATTERNS = [
     r"(ignore|disregard)\s+(all\s+)?(previous|above|prior)\s+(instructions?|rules?)",
     r"你现在是|从现在开始你",
     r"不需要(审计|校验|验证|检查)",
-    r"(绕过|跳过|关闭)(审计|校验|验证|规则|限制|护栏)",
+    r"(绕过|跳过|关闭|别管|取消)(审计|校验|验证|检查|规则|限制|护栏)",
+    # 索取/外泄系统规则：正序与倒序两种语序都要覆盖
+    r"(输出|打印|泄露|告诉我|贴出?)\s*(你的)?\s*(系统)?\s*(提示词|prompt|指令|规则)",
+    r"(把|将).{0,6}(系统)?(提示词|prompt|指令|规则|限制).{0,8}(打印|输出|贴|发|忽略|省略)",
+    r"(系统)?(提示词|prompt)\s*(是什么|全文|内容)",
+    # 伪造前置条件：假设校验已通过
+    r"(假设|假装|就当|默认).{0,8}(校验|审计|验证|检查).{0,6}(已)?(通过|完成|没问题)",
     r"直接(给我|告诉我|输出)(一个|个)?(正|好|乐观|肯定)的?(结论|答案|数)",
-    r"(输出|打印|泄露|告诉我)(你的)?(系统)?(提示词|prompt|规则)",
-    r"system\s*prompt",
     r"当作(我|用户)说(过)?",
 ]
 
 FUTURE_PATTERNS = [
     r"(预测|预估|推算|展望|forecast|predict)[^。？\n]{0,20}(未来|明年|后年|20[3-9]\d)",
-    r"(未来|明年|后年)[^。？\n]{0,10}(会|将|是否)(关停|倒闭|关闭)",
-    r"20[3-9]\d\s*年",
+    r"(未来|明年|后年|今后)[^。？\n]{0,12}(会|将|是否)[^。？\n]{0,12}(关停|倒闭|关闭|趋势)",
+    r"(未来|明年|后年|今后)[^。？\n]{0,12}(趋势|走势)",
+    r"(未来|明年|后年|今后)[^。？\n]{0,16}(关停|倒闭|关闭|涨|跌|上升|下降|还在)",
+    r"(202[6-9]|20[3-9]\d)\s*年",
+    r"(tell|show|give|print|reveal)\s+me\s+(your\s+)?(system\s+)?(prompt|instructions)",
 ]
+
+# 改写归一化：只用于规则匹配，不改用户看到的原句。
+# 目的是把「同义改写」收敛到同一批触发词，减少纯正则的脆性。
+NORMALIZE = [
+    (r"忘掉|忘记", "忽略"),
+    (r"那些|这些", ""),
+    (r"往后|接下来", "未来"),
+    (r"取消审查|取消检查|取消审核", "取消校验"),
+    (r"\btell\s+me\b", "告诉我"),
+    (r"\byour\b", "你的"),
+    (r"\bsystem\s+prompt\b", "系统提示词"),
+    (r"命令你", "你"),
+]
+
+
+def normalize(q: str) -> str:
+    out = q
+    for pat, rep in NORMALIZE:
+        out = re.sub(pat, rep, out, flags=re.IGNORECASE)
+    return out
+
 
 CAUSAL_VERBS = ["导致", "造成", "引起", "使得", "带来", "提升了", "降低了", "将会使", "必然"]
 
@@ -58,11 +86,15 @@ class Finding:
                 "message": self.message, "detail": self.detail}
 
 
-def scan_input(question: str) -> list[Finding]:
+def scan_input(question: str, disabled: set[str] | None = None) -> list[Finding]:
+    """disabled 用于消融实验：关掉某条规则后看漏检/误伤怎么变。"""
+    off = disabled or set()
     out: list[Finding] = []
-    q = question or ""
+    q = normalize(question or "")
 
     for pat in INJECTION_PATTERNS:
+        if "A1-injection" in off:
+            break
         if re.search(pat, q, flags=re.IGNORECASE):
             out.append(Finding("A1-injection", BLOCK,
                                "检测到提示词注入：要求绕过审计/校验，或索取系统规则",
@@ -70,6 +102,8 @@ def scan_input(question: str) -> list[Finding]:
             break
 
     for pat in FUTURE_PATTERNS:
+        if "A2-out-of-time" in off:
+            break
         m = re.search(pat, q)
         if m:
             out.append(Finding("A2-out-of-time", BLOCK,
@@ -77,7 +111,7 @@ def scan_input(question: str) -> list[Finding]:
                                {"matched": m.group(0)}))
             break
 
-    hit = [c for c in CN_GEO if c in q]
+    hit = [c for c in CN_GEO if c in q] if "A3-out-of-domain" not in off else []
     if hit:
         out.append(Finding("A3-out-of-domain", BLOCK,
                            f"命中非美国地区关键词 {hit}；面板是美国 FDIC 网点数据，不含中国网点",
@@ -102,7 +136,9 @@ def check_plan(plan: list[dict]) -> list[Finding]:
     return out
 
 
-def check_result(tool: str, result: dict, context: dict | None = None) -> list[Finding]:
+def check_result(tool: str, result: dict, context: dict | None = None,
+                 disabled: set[str] | None = None) -> list[Finding]:
+    off = disabled or set()
     out: list[Finding] = []
     ctx = context or {}
 
@@ -140,7 +176,7 @@ def check_result(tool: str, result: dict, context: dict | None = None) -> list[F
         out.append(Finding("A8-causal-language", WARN,
                            "当前结论等级为 C，报告中禁止出现因果动词", {}))
 
-    return out
+    return [f for f in out if f.rule not in off]
 
 
 def strip_causal_language(text: str) -> tuple[str, list[str]]:

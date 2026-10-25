@@ -13,7 +13,7 @@ import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-RUNS = ROOT / "runs"
+RUNS = Path(os.environ.get("VERIBRANCH_RUNS_DIR") or (ROOT / "runs"))
 GENESIS = "0" * 64
 
 
